@@ -1,0 +1,14 @@
+torch
+numpy
+transformers
+datasets
+tiktoken
+wandb
+tqdm
+notebook
+scikit-learn
+matplotlib
+umap-learn
+plotly
+imageio
+flask

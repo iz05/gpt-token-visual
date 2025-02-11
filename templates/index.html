@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Token Animation</title>
+</head>
+<body>
+    <div style="display: flex;">
+        <div style="width: 300px; padding: 20px; background: #f0f0f0;">
+            <h2>Select Tokens</h2>
+            <form method="POST">
+                <select name="indices[]" multiple 
+                        style="width: 100%; padding: 8px; height: 200px;">
+                    {% for idx, token in tokens %}
+                        <option value="{{ idx }}" 
+                                {% if selected_flags[idx] == 1 %}selected{% endif %}>
+                            {{ token }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <br><br>
+                <button type="submit" 
+                        style="padding: 8px 16px; background: #4CAF50; color: white; border: none;">
+                    Update Animation
+                </button>
+            </form>
+            <p style="color: #666; font-size: 12px; margin-top: 10px;">
+                (Hold Ctrl/Cmd to select multiple tokens)
+            </p>
+        </div>
+        
+        <div style="flex-grow: 1; padding: 20px;">
+            {{ fig_html|safe }}
+        </div>
+    </div>
+</body>
+</html>
