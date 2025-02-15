@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Token Distance Visualization</title>
+    <style>
+        .token-container {
+            padding: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .token-wrapper {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            min-width: 60px;
+            height: 40px;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        .token-span {
+            display: block;
+            cursor: pointer;
+            color: #333;
+            transition: inherit;
+            text-align: center;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: #f8f8f8;
+        }
+        .token-span.hovered {
+            background: #1e90ff;
+            color: white !important;
+            transform: scale(1.2);
+            z-index: 2;
+        }
+    </style>
+</head>
+<body>
+    <div class="token-container">
+        {% for token in tokens %}
+            <div class="token-wrapper">
+                <span class="token-span" data-index="{{ loop.index0 }}">{{ token }}</span>
+            </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        const embeddings = {{ embeddings|tojson|safe }};
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            const tokenWrappers = document.querySelectorAll('.token-wrapper');
+            const tokenSpans = document.querySelectorAll('.token-span');
+            let animationFrame;
+
+            function calculateSizes(hoveredIndex) {
+                const hoveredEmbedding = embeddings[hoveredIndex];
+                const distances = embeddings.map(emb => {
+                    let sum = 0;
+                    for (let i = 0; i < emb.length; i++) {
+                        sum += (emb[i] - hoveredEmbedding[i]) ** 2;
+                    }
+                    return Math.sqrt(sum);
+                });
+
+                const maxDist = Math.max(...distances);
+                const minDist = Math.min(...distances);
+                const range = maxDist - minDist;
+
+                tokenSpans.forEach((span, idx) => {
+                    const wrapper = span.parentElement;
+                    if (idx === hoveredIndex) return;
+
+                    const dist = distances[idx];
+                    const scale = range > 0 ? 0.6 + (1 - (dist - minDist)/range * 0.8) : 1;
+                    const opacity = 0.4 + (1 - (dist - minDist)/range * 0.6);
+
+                    wrapper.style.transform = `scale(${scale})`;
+                    wrapper.style.opacity = opacity;
+                });
+            }
+
+            function resetSizes() {
+                tokenWrappers.forEach(wrapper => {
+                    wrapper.style.transform = 'scale(1)';
+                    wrapper.style.opacity = '1';
+                });
+            }
+
+            tokenSpans.forEach(span => {
+                span.addEventListener('mouseenter', () => {
+                    span.classList.add('hovered');
+                    const index = parseInt(span.dataset.index);
+                    
+                    cancelAnimationFrame(animationFrame);
+                    animationFrame = requestAnimationFrame(() => {
+                        calculateSizes(index);
+                    });
+                });
+
+                span.addEventListener('mouseleave', () => {
+                    span.classList.remove('hovered');
+                    cancelAnimationFrame(animationFrame);
+                    animationFrame = requestAnimationFrame(resetSizes);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

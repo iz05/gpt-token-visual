@@ -5,6 +5,8 @@ import numpy as np
 import plotly.graph_objects as go
 
 import os
+import io
+import requests
 import pickle
 from contextlib import nullcontext
 import torch
@@ -14,10 +16,17 @@ from model import GPTConfig, GPT
 app = Flask(__name__)
 num_layers = 7
 emb_dim = 384
+url = "https://www.dropbox.com/scl/fi/ocaovecmf7che47p1pn0o/ckpt.pt?rlkey=lpfz7b1e5k26ypuw6gltocxub&st=mt9nen3h&dl=1"
 
 def load_model():
-    ckpt_path = os.path.join('out-tinystories', 'ckpt.pt')
-    checkpoint = torch.load(ckpt_path, map_location=torch.device("cpu"))  # Ensure model loads on CPU
+    response = requests.get(url, stream=True)
+    response.raise_for_status()  # Ensure the request was successful
+    checkpoint = torch.load(io.BytesIO(response.content), map_location="cpu")
+
+    # Load the model directly from memory (RAM)
+    # ckpt_path = os.path.join('out-tinystories', 'ckpt.pt')
+    # checkpoint = torch.load(ckpt_path, map_location=torch.device("cpu"))  # Ensure model loads on CPU
+    
     gptconf = GPTConfig(**checkpoint['model_args'])
     model = GPT(gptconf)
     model.to("cpu")  # Move model to CPU
@@ -213,6 +222,12 @@ def index():
                          tokens=enumerate(tokens),
                          selected_flags=selected_flags,
                          fig_html=generate_figure(selected_flags))
+
+@app.route('/distance')
+def distance():
+    last_layer_embs = all_embs[-1].tolist() # Convert numpy array to native Python types
+    last_layer_embs = [[float(num) for num in emb] for emb in last_layer_embs] # Ensure all numbers are native Python floats
+    return render_template('distance.html', tokens=tokens.tolist(), embeddings=last_layer_embs)
 
 if __name__ == '__main__':
     app.run(debug=True)
