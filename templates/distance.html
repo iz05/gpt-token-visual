@@ -3,7 +3,7 @@
 <head>
     <title>Token Distance Visualization</title>
     <style>
-        /* Add navigation button styles */
+        /* Navigation and container styles remain the same */
         .nav-buttons {
             padding: 20px;
             margin-bottom: 20px;
@@ -19,7 +19,6 @@
             text-decoration: none;
             font-size: 14px;
         }
-        /* Rest of existing styles */
         .token-container {
             padding: 40px;
             max-width: 1200px;
@@ -45,17 +44,41 @@
             padding: 4px 8px;
             border-radius: 4px;
             background: #f8f8f8;
+            font-size: 14px;
+            font-weight: bold;
         }
-        .token-span.hovered {
-            background: #1e90ff;
-            color: white !important;
-            transform: scale(1.2);
-            z-index: 2;
+        .color-scale {
+            margin: 20px auto;
+            width: 300px;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .color-gradient {
+            height: 20px;
+            background: linear-gradient(
+                to right,
+                #ff0022,  /* Bright red */
+                #ff6600,  /* Orange */
+                #ffdd00,  /* Yellow */
+                #00ff88,  /* Green */
+                #0099ff,  /* Blue */
+                #3300ff   /* Dark blue */
+            );
+            border-radius: 4px;
+        }
+        .scale-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <!-- Navigation Buttons -->
     <div class="nav-buttons">
         <a href="{{ url_for('index') }}" class="nav-button" style="background: #666;">
             Return to Index
@@ -63,6 +86,14 @@
         <a href="{{ url_for('visualize') }}" class="nav-button" style="background: #4CAF50;">
             Go to Visualize
         </a>
+    </div>
+
+    <div class="color-scale">
+        <div class="color-gradient"></div>
+        <div class="scale-labels">
+            <span>CLOSEST</span>
+            <span>FARTHEST</span>
+        </div>
     </div>
 
     <div class="token-container">
@@ -77,11 +108,20 @@
         const embeddings = {{ embeddings|tojson|safe }};
         
         document.addEventListener('DOMContentLoaded', () => {
-            const tokenWrappers = document.querySelectorAll('.token-wrapper');
             const tokenSpans = document.querySelectorAll('.token-span');
             let animationFrame;
 
-            function calculateSizes(hoveredIndex) {
+            // Turbo color scheme (high contrast)
+            const turboColors = [
+                [255, 0, 34],    // Red
+                [255, 102, 0],   // Orange
+                [255, 221, 0],   // Yellow
+                [0, 255, 136],   // Green
+                [126, 202, 252],   // Blue
+                [97, 113, 250]     // Dark blue
+            ];
+
+            function calculateColors(hoveredIndex) {
                 const hoveredEmbedding = embeddings[hoveredIndex];
                 const distances = embeddings.map(emb => {
                     let sum = 0;
@@ -96,40 +136,54 @@
                 const range = maxDist - minDist;
 
                 tokenSpans.forEach((span, idx) => {
-                    const wrapper = span.parentElement;
-                    if (idx === hoveredIndex) return;
+                    if (idx === hoveredIndex) {
+                        span.style.backgroundColor = '#ff0000';
+                        span.style.color = 'white';
+                        return;
+                    }
 
                     const dist = distances[idx];
-                    const scale = range > 0 ? 0.6 + (1 - (dist - minDist)/range * 0.8) : 1;
-                    const opacity = 0.4 + (1 - (dist - minDist)/range * 0.6);
+                    const t = range > 0 ? (dist - minDist) / range : 0;
+                    
+                    // Get color from pre-defined gradient
+                    const colorIndex = Math.min(
+                        turboColors.length - 1,
+                        Math.floor(t * (turboColors.length - 1))
+                    );
+                    const [r, g, b] = turboColors[colorIndex];
+                    const color = `rgb(${r},${g},${b})`;
+                    
+                    // Dynamic scaling
+                    const scale = 0.8 + (1 - t) * 0.4;
+                    const fontSize = 12 + (1 - t) * 8;
 
-                    wrapper.style.transform = `scale(${scale})`;
-                    wrapper.style.opacity = opacity;
+                    span.style.backgroundColor = color;
+                    span.style.transform = `scale(${scale})`;
+                    span.style.fontSize = `${fontSize}px`;
+                    span.style.zIndex = Math.floor((1 - t) * 100);
                 });
             }
 
-            function resetSizes() {
-                tokenWrappers.forEach(wrapper => {
-                    wrapper.style.transform = 'scale(1)';
-                    wrapper.style.opacity = '1';
+            function resetColors() {
+                tokenSpans.forEach(span => {
+                    span.style.backgroundColor = '#f8f8f8';
+                    span.style.color = '#333';
+                    span.style.fontSize = '14px';
+                    span.style.transform = 'scale(1)';
+                    span.style.zIndex = 'auto';
                 });
             }
 
             tokenSpans.forEach(span => {
                 span.addEventListener('mouseenter', () => {
-                    span.classList.add('hovered');
                     const index = parseInt(span.dataset.index);
-                    
                     cancelAnimationFrame(animationFrame);
-                    animationFrame = requestAnimationFrame(() => {
-                        calculateSizes(index);
-                    });
+                    animationFrame = requestAnimationFrame(() => calculateColors(index));
                 });
 
                 span.addEventListener('mouseleave', () => {
-                    span.classList.remove('hovered');
                     cancelAnimationFrame(animationFrame);
-                    animationFrame = requestAnimationFrame(resetSizes);
+                    animationFrame = requestAnimationFrame(resetColors);
                 });
             });
         });
