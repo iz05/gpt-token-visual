@@ -3,6 +3,23 @@
 <head>
     <title>Token Distance Visualization</title>
     <style>
+        /* Add navigation button styles */
+        .nav-buttons {
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .nav-button {
+            padding: 8px 16px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        /* Rest of existing styles */
         .token-container {
             padding: 40px;
             max-width: 1200px;
@@ -38,6 +55,16 @@
     </style>
 </head>
 <body>
+    <!-- Navigation Buttons -->
+    <div class="nav-buttons">
+        <a href="{{ url_for('index') }}" class="nav-button" style="background: #666;">
+            Return to Index
+        </a>
+        <a href="{{ url_for('visualize') }}" class="nav-button" style="background: #4CAF50;">
+            Go to Visualize
+        </a>
+    </div>
+
     <div class="token-container">
         {% for token in tokens %}
             <div class="token-wrapper">

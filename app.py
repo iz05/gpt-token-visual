@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for
 from sklearn.neighbors import kneighbors_graph
 import pandas as pd
 import numpy as np
@@ -14,6 +14,7 @@ import tiktoken
 from model import GPTConfig, GPT
 
 app = Flask(__name__)
+app.secret_key = 'secretsecretsecret314159265358979'
 num_layers = 7
 emb_dim = 384
 url = "https://www.dropbox.com/scl/fi/ocaovecmf7che47p1pn0o/ckpt.pt?rlkey=lpfz7b1e5k26ypuw6gltocxub&st=mt9nen3h&dl=1"
@@ -54,14 +55,14 @@ print("Loading model...")
 model = load_model()
 print("Model loaded. Loading encode and decode functions...")
 encode, decode = get_encode_decode()
-print("Encode and decode loaded. Loading precomputed data...")
+print("Encode and decode loaded.")
 
 def get_embeddings(text):
     start_ids = encode(text)
     x = torch.tensor(start_ids, dtype=torch.long, device="cpu")[None, ...]
 
     embs = model.get_embeddings(x)
-    return embs, [decode([token]) for token in start_ids]
+    return [emb.detach().cpu().tolist() for emb in embs], [decode([token]) for token in start_ids]
 
 def load_precomputed_data():
     # Load data and prepare coordinates
@@ -69,12 +70,14 @@ def load_precomputed_data():
     all_embs = []
     for i in range(1, num_layers + 1):
         all_embs.append([eval(emb) for emb in df[f"emb{i}"]])
-    return np.array(all_embs), df["token"]
+    return all_embs, df["token"]
 
 def reduce_3d(all_embs):
     n_neighbors = 15
     n_points = len(all_embs[0])
-    all_embs_reshaped = all_embs.reshape(n_points * num_layers, emb_dim)
+    all_embs_reshaped = []
+    for i in range(num_layers):
+        all_embs_reshaped.extend(all_embs[i])  # Flatten the sublist (layer-wise flattening)
     affinity_matrix = kneighbors_graph(all_embs_reshaped, n_neighbors=n_neighbors, mode='connectivity', include_self=False).toarray()
     affinity_matrix = np.clip(affinity_matrix + affinity_matrix.T, a_min=0, a_max=1)
     degree_matrix = np.diag(np.sum(affinity_matrix, axis=1))
@@ -94,11 +97,6 @@ def reduce_3d(all_embs):
     
     return x, y, z
 
-all_embs, tokens = load_precomputed_data()
-print("Loaded precomputed data. Computing 3d reductions...")
-x, y, z = reduce_3d(all_embs)
-print("Computed 3D reductions.")
-
 def linear_combine(x1, y1, z1, x2, y2, z2, alpha):
     return (
         [x1[i] * (1 - alpha) + x2[i] * alpha for i in range(len(x1))],
@@ -106,7 +104,8 @@ def linear_combine(x1, y1, z1, x2, y2, z2, alpha):
         [z1[i] * (1 - alpha) + z2[i] * alpha for i in range(len(z1))]
     )
 
-def generate_figure(selected_flags):
+def generate_figure(selected_flags, tokens, all_embs):
+    x, y, z = reduce_3d(all_embs)
 
     def get_colors_and_text(df_tokens):
         colors = []
@@ -205,9 +204,30 @@ def generate_figure(selected_flags):
     """
     return html
 
-@app.route('/visualize', methods=['GET', 'POST'])
-def index():
+all_embs = None
+tokens = None
 
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    global all_embs, tokens
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'submit':
+            # Process user input
+            prompt_text = request.form.get('prompt_text', '')
+            all_embs, tokens = get_embeddings(prompt_text)
+            
+        elif action == 'use_preload':
+            # Reload original data
+            all_embs, tokens = load_precomputed_data()
+        
+        return redirect(url_for('distance'))
+    
+    return render_template('prompt.html')
+
+@app.route('/visualize', methods=['GET', 'POST'])
+def visualize():
+    global all_embs, tokens
     selected_flags = [0] * len(tokens)
     
     if request.method == 'POST':
@@ -221,13 +241,13 @@ def index():
     return render_template('visualize.html',
                          tokens=enumerate(tokens),
                          selected_flags=selected_flags,
-                         fig_html=generate_figure(selected_flags))
+                         fig_html=generate_figure(selected_flags, tokens, all_embs))
 
 @app.route('/distance')
 def distance():
-    last_layer_embs = all_embs[-1].tolist() # Convert numpy array to native Python types
-    last_layer_embs = [[float(num) for num in emb] for emb in last_layer_embs] # Ensure all numbers are native Python floats
-    return render_template('distance.html', tokens=tokens.tolist(), embeddings=last_layer_embs)
+    global all_embs, tokens
+    last_layer_embs = all_embs[-1]
+    return render_template('distance.html', tokens=tokens, embeddings=last_layer_embs)
 
 if __name__ == '__main__':
     app.run(debug=True)
