@@ -1,5 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for
 from sklearn.neighbors import kneighbors_graph
+from sklearn.cluster import SpectralClustering
+import json
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -212,16 +214,14 @@ def index():
     global all_embs, tokens
     if request.method == 'POST':
         action = request.form.get('action')
-        if action == 'submit':
-            # Process user input
-            prompt_text = request.form.get('prompt_text', '')
-            all_embs, tokens = get_embeddings(prompt_text)
+        prompt_text = request.form.get('prompt_text', '')
+        all_embs, tokens = get_embeddings(prompt_text)
+
+        if action == 'distance':
+            return redirect(url_for('distance'))
             
-        elif action == 'use_preload':
-            # Reload original data
-            all_embs, tokens = load_precomputed_data()
-        
-        return redirect(url_for('distance'))
+        elif action == 'cluster':
+            return redirect(url_for('cluster'))
     
     return render_template('prompt.html')
 
@@ -248,6 +248,26 @@ def distance():
     global all_embs, tokens
     last_layer_embs = all_embs[-1]
     return render_template('distance.html', tokens=tokens, embeddings=last_layer_embs)
+
+@app.route('/cluster')
+def cluster():
+    global all_embs, tokens
+    last_layer_embs = all_embs[-1]
+
+    X = np.array(last_layer_embs)
+    precomputed_clusters = {}
+    for k in range(2, 11):
+        clustering = SpectralClustering(
+            n_clusters=k,
+            assign_labels='discretize',
+            random_state=0,
+            affinity='nearest_neighbors'
+        ).fit(X)
+        precomputed_clusters[k] = clustering.labels_.tolist()
+    
+    tokens_list = list(tokens)
+    # Pass only the precomputed cluster labels (and tokens for display)
+    return render_template('cluster.html', clusters=precomputed_clusters, tokens=tokens_list)
 
 if __name__ == '__main__':
     app.run(debug=True)

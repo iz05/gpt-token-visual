@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cluster Visualization</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #fafafa;
+      margin: 0;
+      padding: 0;
+    }
+    .nav-buttons {
+      padding: 20px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    .nav-button {
+      padding: 8px 16px;
+      color: white;
+      background: #666;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    h1 {
+      text-align: center;
+      margin-top: 20px;
+    }
+    .slider-container {
+      margin: 20px auto;
+      width: 80%;
+      max-width: 600px;
+      text-align: center;
+      font-size: 16px;
+    }
+    .slider-container input[type="range"] {
+      width: 100%;
+      margin-top: 10px;
+    }
+    .clusters-container {
+      margin: 20px auto;
+      width: 80%;
+      max-width: 800px;
+    }
+    .cluster-group {
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 20px;
+      background: #fff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .cluster-header {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .token-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .token-span {
+      display: inline-block;
+      padding: 6px 12px;
+      background: #f8f8f8;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-buttons">
+      <a href="{{ url_for('index') }}" class="nav-button">Return to Index</a>
+  </div>
+
+  <h1>Cluster Visualization</h1>
+
+  <div class="slider-container">
+      <label for="k-slider">Choose number of clusters (k): <span id="k-value">2</span></label>
+      <input type="range" id="k-slider" name="k-slider" min="2" max="10" value="2">
+  </div>
+
+  <div class="clusters-container" id="clusters-container">
+      <!-- Cluster groups will be inserted here -->
+  </div>
+
+  <!-- Embed the clusters and tokens data as JSON -->
+  <script type="text/javascript">
+      var clusters = {{ clusters|tojson }};
+      var tokens = {{ tokens|tojson }};
+
+      function updateClusters() {
+          var k = document.getElementById('k-slider').value;
+          document.getElementById('k-value').innerText = k;
+          var labels = clusters[k];
+
+          // Group tokens by cluster label (preserving the original order)
+          var clustersGroup = {};
+          for (var i = 0; i < labels.length; i++) {
+              var label = labels[i];
+              if (!clustersGroup[label]) {
+                  clustersGroup[label] = [];
+              }
+              clustersGroup[label].push(tokens[i]);
+          }
+
+          // Clear any previous content
+          var container = document.getElementById('clusters-container');
+          container.innerHTML = '';
+
+          // Create a cluster group for each cluster label
+          for (var label in clustersGroup) {
+              var groupDiv = document.createElement('div');
+              groupDiv.className = 'cluster-group';
+
+              var header = document.createElement('div');
+              header.className = 'cluster-header';
+              header.textContent = "Cluster #" + label;
+              groupDiv.appendChild(header);
+
+              var tokenDiv = document.createElement('div');
+              tokenDiv.className = 'token-container';
+
+              clustersGroup[label].forEach(function(token) {
+                  var span = document.createElement('span');
+                  span.className = 'token-span';
+                  span.textContent = token;
+                  tokenDiv.appendChild(span);
+              });
+
+              groupDiv.appendChild(tokenDiv);
+              container.appendChild(groupDiv);
+          }
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+          document.getElementById('k-slider').addEventListener('input', updateClusters);
+          updateClusters();
+      });
+  </script>
+</body>
+</html>
