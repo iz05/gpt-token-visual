@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Numeric Rank</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -16,7 +17,7 @@
         }
         .slider-container {
             margin: 40px auto;
-            max-width: 500px;
+            max-width: 800px;
         }
         #layerSlider {
             width: 80%;
@@ -31,6 +32,10 @@
             border-radius: 5px;
             margin: 20px 0;
         }
+        #plot-container {
+            margin-top: 30px;
+            height: 500px;
+        }
     </style>
 </head>
 <body>
@@ -40,74 +45,56 @@
         <input type="range" id="layerSlider" min="0" value="0" step="1">
         <div id="numericRankDisplay">Loading...</div>
     </div>
+    <div id="plot-container"></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Debugging check 1: Verify data exists
-            const numericRanksData = '{{ numeric_ranks_json | safe }}';
-            console.log('Raw JSON data:', numericRanksData);
-            
-            if (!numericRanksData || numericRanksData === '[]') {
-                document.getElementById('numericRankDisplay').textContent = 
-                    "Error: No rank data available";
-                return;
-            }
+            // Parse both datasets
+            const numericRanks = JSON.parse('{{ numeric_ranks_json | safe }}');
+            const eigenvalues = JSON.parse('{{ eigenvalues_json | safe }}');
 
-            // Debugging check 2: Parse data
-            let numericRanks;
-            try {
-                numericRanks = JSON.parse(numericRanksData);
-            } catch (e) {
-                console.error('JSON parse error:', e);
-                return;
-            }
-            console.log('Parsed numeric ranks:', numericRanks);
+            // Debug output
+            console.log('Numeric Ranks:', numericRanks);
+            console.log('Eigenvalues:', eigenvalues);
 
-            // Debugging check 3: Validate layers
             const maxLayer = {{ num_layers - 1 }};
-            console.log('Max layer:', maxLayer);
-            
             const slider = document.getElementById('layerSlider');
             const display = document.getElementById('numericRankDisplay');
-            
+            const plotDiv = document.getElementById('plot-container');
+
             // Initialize slider
             slider.max = maxLayer;
-            console.log('Slider initialized (min: 0, max: ${maxLayer})');
 
-            // Update display with validation
             function updateDisplay() {
                 const layer = parseInt(slider.value);
-                console.log('Selected layer:', layer);
                 
-                if (layer < 0 || layer >= numericRanks.length) {
-                    display.textContent = "Invalid layer selection";
-                    return;
-                }
-                
-                const value = numericRanks[layer];
-                console.log(numericRanks[2]);
-                console.log('Numeric rank value:', value);
-                
-                if (typeof value !== 'number') {
-                    display.textContent = "Invalid data format";
-                    return;
-                }
+                // Update numeric rank
+                display.textContent = `Layer ${layer} Numeric Rank: ${numericRanks[layer].toFixed(2)}`;
 
-                display.textContent = 
-                    `Layer ${layer} Numeric Rank: ${value.toFixed(2)}`;
+                // Update plot
+                const trace = {
+                    x: eigenvalues[layer].map((_, i) => i + 1),
+                    y: eigenvalues[layer],
+                    mode: 'lines+markers',
+                    type: 'scatter',
+                    name: 'Eigenvalues'
+                };
+
+                const layout = {
+                    title: `Eigenvalues - Layer ${layer}`,
+                    xaxis: {title: 'Rank'},
+                    yaxis: {title: 'Value'},
+                    showlegend: false
+                };
+
+                Plotly.react(plotDiv, [trace], layout);
             }
 
             // Initial update
             updateDisplay();
             
-            // Event listener with error handling
-            slider.addEventListener('input', function(e) {
-                try {
-                    updateDisplay();
-                } catch (err) {
-                    console.error('Update error:', err);
-                }
-            });
+            // Event listener
+            slider.addEventListener('input', updateDisplay);
         });
     </script>
 </body>

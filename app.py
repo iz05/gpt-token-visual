@@ -285,8 +285,8 @@ def numeric_rank():
         numeric_ranks.append(sum_abs / max_abs)
 
     num_layers = len(all_embs)
-    numeric_ranks = [float(num) for num in numeric_ranks]
-    print(numeric_ranks)
+    numeric_ranks = [float(num) for num in numeric_ranks] # just in case np doesn't work
+
     return render_template('numeric_rank.html',
                            num_layers=num_layers,
                            eigenvalues_json=json.dumps(eigenvalues_list),
