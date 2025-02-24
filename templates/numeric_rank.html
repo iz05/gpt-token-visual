@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Numeric Rank</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+        }
+        #numericRankDisplay {
+            font-size: 2.5em;
+            margin: 30px 0;
+            color: #2c3e50;
+            min-height: 60px;
+        }
+        .slider-container {
+            margin: 40px auto;
+            max-width: 500px;
+        }
+        #layerSlider {
+            width: 80%;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 25px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <a href="{{ url_for('index') }}" class="button">← Back to Main</a>
+
+    <div class="slider-container">
+        <input type="range" id="layerSlider" min="0" value="0" step="1">
+        <div id="numericRankDisplay">Loading...</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Debugging check 1: Verify data exists
+            const numericRanksData = '{{ numeric_ranks_json | safe }}';
+            console.log('Raw JSON data:', numericRanksData);
+            
+            if (!numericRanksData || numericRanksData === '[]') {
+                document.getElementById('numericRankDisplay').textContent = 
+                    "Error: No rank data available";
+                return;
+            }
+
+            // Debugging check 2: Parse data
+            let numericRanks;
+            try {
+                numericRanks = JSON.parse(numericRanksData);
+            } catch (e) {
+                console.error('JSON parse error:', e);
+                return;
+            }
+            console.log('Parsed numeric ranks:', numericRanks);
+
+            // Debugging check 3: Validate layers
+            const maxLayer = {{ num_layers - 1 }};
+            console.log('Max layer:', maxLayer);
+            
+            const slider = document.getElementById('layerSlider');
+            const display = document.getElementById('numericRankDisplay');
+            
+            // Initialize slider
+            slider.max = maxLayer;
+            console.log('Slider initialized (min: 0, max: ${maxLayer})');
+
+            // Update display with validation
+            function updateDisplay() {
+                const layer = parseInt(slider.value);
+                console.log('Selected layer:', layer);
+                
+                if (layer < 0 || layer >= numericRanks.length) {
+                    display.textContent = "Invalid layer selection";
+                    return;
+                }
+                
+                const value = numericRanks[layer];
+                console.log(numericRanks[2]);
+                console.log('Numeric rank value:', value);
+                
+                if (typeof value !== 'number') {
+                    display.textContent = "Invalid data format";
+                    return;
+                }
+
+                display.textContent = 
+                    `Layer ${layer} Numeric Rank: ${value.toFixed(2)}`;
+            }
+
+            // Initial update
+            updateDisplay();
+            
+            // Event listener with error handling
+            slider.addEventListener('input', function(e) {
+                try {
+                    updateDisplay();
+                } catch (err) {
+                    console.error('Update error:', err);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

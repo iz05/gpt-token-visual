@@ -1,6 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 from sklearn.neighbors import kneighbors_graph
 from sklearn.cluster import SpectralClustering
+from sklearn.metrics.pairwise import cosine_similarity
 import json
 import pandas as pd
 import numpy as np
@@ -217,11 +218,7 @@ def index():
         prompt_text = request.form.get('prompt_text', '')
         all_embs, tokens = get_embeddings(prompt_text)
 
-        if action == 'distance':
-            return redirect(url_for('distance'))
-            
-        elif action == 'cluster':
-            return redirect(url_for('cluster'))
+        return redirect(url_for(action))
     
     return render_template('prompt.html')
 
@@ -268,6 +265,32 @@ def cluster():
     tokens_list = list(tokens)
     # Pass only the precomputed cluster labels (and tokens for display)
     return render_template('cluster.html', clusters=precomputed_clusters, tokens=tokens_list)
+
+@app.route('/numeric_rank')
+def numeric_rank():
+    global all_embs, tokens
+
+    numeric_ranks = []
+    eigenvalues_list = []
+ 
+    for layer_emb in all_embs:
+        embeddings = np.array(layer_emb)
+        A = cosine_similarity(embeddings)
+        eigenvalues = np.linalg.eigvalsh(A)  # Using eigh for symmetric matrices
+        sorted_indices = np.argsort(np.abs(eigenvalues))[::-1]
+        sorted_eigenvalues = eigenvalues[sorted_indices]
+        eigenvalues_list.append(sorted_eigenvalues.tolist())
+        sum_abs = np.sum(np.abs(sorted_eigenvalues))
+        max_abs = np.max(np.abs(sorted_eigenvalues))
+        numeric_ranks.append(sum_abs / max_abs)
+
+    num_layers = len(all_embs)
+    numeric_ranks = [float(num) for num in numeric_ranks]
+    print(numeric_ranks)
+    return render_template('numeric_rank.html',
+                           num_layers=num_layers,
+                           eigenvalues_json=json.dumps(eigenvalues_list),
+                           numeric_ranks_json=json.dumps(numeric_ranks))
 
 if __name__ == '__main__':
     app.run(debug=True)
