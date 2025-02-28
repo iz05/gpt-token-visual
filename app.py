@@ -21,6 +21,7 @@ app.secret_key = 'secretsecretsecret314159265358979'
 num_layers = 7
 emb_dim = 384
 url = "https://www.dropbox.com/scl/fi/ocaovecmf7che47p1pn0o/ckpt.pt?rlkey=lpfz7b1e5k26ypuw6gltocxub&st=mt9nen3h&dl=1"
+loaded_numrank_data = pickle.load(open("numrank_data.pkl", "rb"))
 
 def load_model():
     response = requests.get(url, stream=True)
@@ -268,7 +269,7 @@ def cluster():
 
 @app.route('/numeric_rank')
 def numeric_rank():
-    global all_embs, tokens
+    global all_embs, tokens, loaded_numrank_data
 
     numeric_ranks = []
     eigenvalues_list = []
@@ -290,7 +291,10 @@ def numeric_rank():
     return render_template('numeric_rank.html',
                            num_layers=num_layers,
                            eigenvalues_json=json.dumps(eigenvalues_list),
-                           numeric_ranks_json=json.dumps(numeric_ranks))
+                           numeric_ranks_json=json.dumps(numeric_ranks),
+                           mean_curve=json.dumps(list(loaded_numrank_data["mean_curve"])),
+                           ci_lower=json.dumps(list(loaded_numrank_data["lower_bound"])),
+                           ci_upper=json.dumps(list(loaded_numrank_data["upper_bound"])))
 
 if __name__ == '__main__':
     app.run(debug=True)

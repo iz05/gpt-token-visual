@@ -36,22 +36,77 @@
             margin-top: 30px;
             height: 500px;
         }
+        #main-plot-container {
+            height: 500px;
+            margin-bottom: 40px;
+        }
     </style>
 </head>
 <body>
+
+    <div id="main-plot-container"></div>
+
     <a href="{{ url_for('index') }}" class="button">← Back to Main</a>
+
+    <div id="plot-container"></div>
 
     <div class="slider-container">
         <input type="range" id="layerSlider" min="0" value="0" step="1">
         <div id="numericRankDisplay">Loading...</div>
     </div>
-    <div id="plot-container"></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Parse both datasets
             const numericRanks = JSON.parse('{{ numeric_ranks_json | safe }}');
             const eigenvalues = JSON.parse('{{ eigenvalues_json | safe }}');
+            const layers = Array.from({length: {{ num_layers }} }, (_, i) => i);
+            const meanCurve = JSON.parse('{{ mean_curve | safe }}');
+            const ciLower = JSON.parse('{{ ci_lower | safe }}');
+            const ciUpper = JSON.parse('{{ ci_upper | safe }}');
+
+            Plotly.newPlot('main-plot-container', 
+                [
+                    {
+                        x: layers,
+                        y: numericRanks,
+                        mode: 'lines+markers',
+                        name: 'Current Run',
+                        line: {color: 'blue'}
+                    },
+                    {
+                        x: layers,
+                        y: meanCurve,
+                        mode: 'lines',
+                        name: 'Mean',
+                        line: {color: 'red', dash: 'dash'}
+                    },
+                    {
+                        x: layers,
+                        y: ciUpper,
+                        mode: 'none',
+                        name: 'Upper CI',
+                        fill: 'tonexty',
+                        fillcolor: 'rgba(255,0,0,0.2)',
+                        line: {color: 'rgba(255,0,0,0.2)'}
+                    },
+                    {
+                        x: layers,
+                        y: ciLower,
+                        mode: 'none',
+                        name: 'Lower CI',
+                        fill: 'tonexty',
+                        fillcolor: 'rgba(255,0,0,0.2)',
+                        line: {color: 'rgba(255,0,0,0.2)'}
+                    }
+                ],
+                {
+                    title: 'Layer vs. Numeric Rank',
+                    xaxis: {title: 'Layer'},
+                    yaxis: {title: 'Numeric Rank'},
+                    showlegend: true
+                }
+            );
 
             // Debug output
             console.log('Numeric Ranks:', numericRanks);
