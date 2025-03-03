@@ -1,3 +1,5 @@
 env/
 __pycache__/
 envtest/
+plots/
+ckpt.pt

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Intrinsic Dimension Plots</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+        }
+        .plot-container {
+            margin: 40px auto;
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 800px;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 25px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            transition: background-color 0.3s ease;
+        }
+        .button:hover {
+            background: #2980b9;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 40px;
+        }
+        h2 {
+            color: #34495e;
+            margin-bottom: 20px;
+        }
+        .dimension-display {
+            font-size: 1.2em;
+            color: #7f8c8d;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Intrinsic Dimension Plots</h1>
+
+    {% for plot in plot_data %}
+    <div class="plot-container">
+        <h2>Layer {{ plot.layer_num }}</h2>
+        <div class="dimension-display">
+            Estimated Dimension: {{ "%.2f"|format(plot.d_c) }}
+        </div>
+        <div id="plot-{{ plot.layer_num }}" style="height: 400px;"></div>
+    </div>
+    {% endfor %}
+
+    <a href="{{ url_for('index') }}" class="button">← Back to Main</a>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            {% for plot in plot_data %}
+            // Create plot for layer {{ plot.layer_num }}
+            const trace{{ plot.layer_num }}_points = {
+                x: {{ plot.log_n }},
+                y: {{ plot.log_Wp }},
+                mode: 'markers',
+                type: 'scatter',
+                name: 'Data points',
+                marker: { color: '#3498db' }
+            };
+
+            const trendline_x{{ plot.layer_num }} = {{ plot.log_n }};
+            const trendline_y{{ plot.layer_num }} = trendline_x{{ plot.layer_num }}.map(
+                x => {{ plot.slope }} * x + {{ plot.intercept }}
+            );
+
+            const trace{{ plot.layer_num }}_line = {
+                x: trendline_x{{ plot.layer_num }},
+                y: trendline_y{{ plot.layer_num }},
+                mode: 'lines',
+                type: 'scatter',
+                name: 'Regression Line',
+                line: { color: '#e74c3c', dash: 'solid' }
+            };
+
+            const layout{{ plot.layer_num }} = {
+                title: `Layer {{ plot.layer_num }} - Log-Log Plot`,
+                xaxis: { title: 'log(subsample sizes)', gridcolor: '#f0f0f0' },
+                yaxis: { title: 'log(Wasserstein distance)', gridcolor: '#f0f0f0' },
+                plot_bgcolor: 'white',
+                showlegend: true,
+                legend: { orientation: 'h', y: -0.2 }
+            };
+
+            Plotly.newPlot(
+                document.getElementById('plot-{{ plot.layer_num }}'),
+                [trace{{ plot.layer_num }}_points, trace{{ plot.layer_num }}_line],
+                layout{{ plot.layer_num }}
+            );
+            {% endfor %}
+        });
+    </script>
+</body>
+</html>
