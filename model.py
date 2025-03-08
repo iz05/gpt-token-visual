@@ -52,6 +52,27 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
+    # Inside the CausalSelfAttention class, add a method to extract and save W_V
+    def extract_and_save_W_V(self):
+        # self.c_attn.weight has shape (3 * n_embd, n_embd)
+        # The weights are concatenated as [W_Q; W_K; W_V] along the first dimension.
+        # So to extract W_V, we slice the last n_embd rows.
+        n_embd = self.n_embd
+        W_V = self.c_attn.weight[2 * n_embd : 3 * n_embd, :].detach().cpu()
+
+        # Create the folder if it doesn't exist
+        folder = "value_matrices"  # reusing the same folder or choose another if desired
+        os.makedirs(folder, exist_ok=True)
+
+        # Count current files in the folder to name the new file appropriately.
+        n = len(os.listdir(folder))
+        file_name = os.path.join(folder, f"value{n}.pkl")
+
+        # Save the W_V matrix as a pickle file
+        with open(file_name, "wb") as f:
+            pickle.dump(W_V.tolist(), f)
+        print(f"W_V matrix saved to {file_name}")
+
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
@@ -61,20 +82,7 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
-        # Here we assume B==1 and choose the first head; adjust if needed.
-        value_matrix = v[0, 0]  # shape becomes (T, hs)
-
-        # Create the folder if it doesn't exist
-        folder = "value_matrices"
-        os.makedirs(folder, exist_ok=True)
-
-        # Count current files in the folder to name the new file appropriately.
-        n = len(os.listdir(folder))
-        file_name = os.path.join(folder, f"value{n}.pkl")
-
-        # Save the value matrix as a pickle (convert to cpu and numpy for easier loading)
-        with open(file_name, "wb") as f:
-            pickle.dump(value_matrix.detach().cpu().tolist(), f)
+        self.extract_and_save_W_V()
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
