@@ -58,7 +58,14 @@ class CausalSelfAttention(nn.Module):
         # The weights are concatenated as [W_Q; W_K; W_V] along the first dimension.
         # So to extract W_V, we slice the last n_embd rows.
         n_embd = self.n_embd
-        W_V = self.c_attn.weight[2 * n_embd : 3 * n_embd, :].detach().cpu()
+        v_weight = self.c_attn.weight[2 * n_embd : 3 * n_embd, :]
+        w_weight = self.c_proj.weight.T
+
+        # Reshape into heads
+        v_weight_heads = v_weight.view(self.n_head, n_embd // self.n_head, n_embd)
+        w_weight_heads = w_weight.view(self.n_head, n_embd // self.n_head, n_embd)
+
+        W_V = v_weight_heads[0].T @ w_weight_heads[0] # This is Value matrix for head i 
 
         # Create the folder if it doesn't exist
         folder = "value_matrices"  # reusing the same folder or choose another if desired
@@ -70,7 +77,7 @@ class CausalSelfAttention(nn.Module):
 
         # Save the W_V matrix as a pickle file
         with open(file_name, "wb") as f:
-            pickle.dump(W_V.tolist(), f)
+            pickle.dump(W_V.detach().cpu().tolist(), f)
         print(f"W_V matrix saved to {file_name}")
 
     def forward(self, x):
