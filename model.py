@@ -15,6 +15,9 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+import os
+import pickle
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -57,6 +60,21 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+        # Here we assume B==1 and choose the first head; adjust if needed.
+        value_matrix = v[0, 0]  # shape becomes (T, hs)
+
+        # Create the folder if it doesn't exist
+        folder = "value_matrices"
+        os.makedirs(folder, exist_ok=True)
+
+        # Count current files in the folder to name the new file appropriately.
+        n = len(os.listdir(folder))
+        file_name = os.path.join(folder, f"value{n}.pkl")
+
+        # Save the value matrix as a pickle (convert to cpu and numpy for easier loading)
+        with open(file_name, "wb") as f:
+            pickle.dump(value_matrix.detach().cpu().tolist(), f)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
