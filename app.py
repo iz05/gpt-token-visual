@@ -1,12 +1,18 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 from sklearn.neighbors import kneighbors_graph
 from sklearn.cluster import SpectralClustering
+from sklearn.metrics.pairwise import cosine_similarity
 import json
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
 import os
+import ot
+import matplotlib.pyplot as plt
+from sklearn.neighbors import kneighbors_graph
+from scipy.sparse.csgraph import shortest_path
+import base64
 import io
 import requests
 import pickle
@@ -20,15 +26,15 @@ app.secret_key = 'secretsecretsecret314159265358979'
 num_layers = 7
 emb_dim = 384
 url = "https://www.dropbox.com/scl/fi/ocaovecmf7che47p1pn0o/ckpt.pt?rlkey=lpfz7b1e5k26ypuw6gltocxub&st=mt9nen3h&dl=1"
+loaded_numrank_data = pickle.load(open("numrank_data.pkl", "rb"))
 
 def load_model():
-    response = requests.get(url, stream=True)
-    response.raise_for_status()  # Ensure the request was successful
-    checkpoint = torch.load(io.BytesIO(response.content), map_location="cpu")
+    # response = requests.get(url, stream=True)
+    # response.raise_for_status()  # Ensure the request was successful
+    # checkpoint = torch.load(io.BytesIO(response.content), map_location="cpu")
 
     # Load the model directly from memory (RAM)
-    # ckpt_path = os.path.join('out-tinystories', 'ckpt.pt')
-    # checkpoint = torch.load(ckpt_path, map_location=torch.device("cpu"))  # Ensure model loads on CPU
+    checkpoint = torch.load('ckpt.pt', map_location=torch.device("cpu"))  # Ensure model loads on CPU
     
     gptconf = GPTConfig(**checkpoint['model_args'])
     model = GPT(gptconf)
@@ -206,6 +212,70 @@ def generate_figure(selected_flags, tokens, all_embs):
     """
     return html
 
+def estimate_clustering_dimension_intrinsic(X, subsample_sizes, layer_num, p=2, n_neighbors=10):
+    """
+    Estimate the intrinsic (clustering) dimension using Wasserstein distances computed with
+    intrinsic (geodesic) distances. The intrinsic distance is approximated as the shortest-path
+    distance on a k-nearest neighbor graph.
+    
+    Parameters:
+        X : array-like, shape (n_samples, n_features)
+            The dataset.
+        subsample_sizes : list or array of ints
+            List of subsample sizes to use.
+        p : float (default=2)
+            The order for the Wasserstein distance.
+        n_neighbors : int (default=10)
+            Number of neighbors for constructing the k-nearest neighbor graph.
+            
+    Returns:
+        d_c : float
+            Estimated intrinsic dimension.
+    """
+    distances = []
+    
+    for n in subsample_sizes:
+        # Draw two independent random subsets of size n
+        idx1 = np.random.choice(len(X), n, replace=False)
+        idx2 = np.random.choice(len(X), n, replace=False)
+        subset1 = X[idx1]
+        subset2 = X[idx2]
+        
+        # Combine subsets to build a local neighborhood graph
+        union = np.vstack([subset1, subset2])
+        
+        # Build the k-nearest neighbor graph (using distances as weights)
+        A = kneighbors_graph(union, n_neighbors=n_neighbors, mode='distance', include_self=False)
+        # Make the graph symmetric (undirected)
+        A = 0.5 * (A + A.T)
+        
+        # Compute shortest path distances in the graph (intrinsic distances)
+        D = shortest_path(A, directed=False)
+        
+        # Extract cost matrix: distances between points in subset1 (rows) and subset2 (columns)
+        M = D[:n, n:]
+        
+        # Compute the Wasserstein distance with the intrinsic metric.
+        # Note: ot.emd2 expects histograms (here we pass empty arrays for uniform weights).
+        Wp = ot.emd2([], [], M) ** (1/p)
+        distances.append(Wp)
+    
+    # Perform log-log regression to estimate d_c
+    log_n = np.log(subsample_sizes)
+    log_Wp = np.log(distances)
+    # We know log(Wp) = -1/d_c * log(n) + C, so slope = -1/d_c
+    slope, intercept = np.polyfit(log_n, log_Wp, 1)
+    d_c = -1.0 / slope
+    
+    return {
+        "layer_num": layer_num,
+        "d_c": d_c,
+        "log_n": log_n.tolist(),
+        "log_Wp": log_Wp.tolist(),
+        "slope": slope,
+        "intercept": intercept
+    }
+
 all_embs = None
 tokens = None
 
@@ -217,11 +287,7 @@ def index():
         prompt_text = request.form.get('prompt_text', '')
         all_embs, tokens = get_embeddings(prompt_text)
 
-        if action == 'distance':
-            return redirect(url_for('distance'))
-            
-        elif action == 'cluster':
-            return redirect(url_for('cluster'))
+        return redirect(url_for(action))
     
     return render_template('prompt.html')
 
@@ -268,6 +334,62 @@ def cluster():
     tokens_list = list(tokens)
     # Pass only the precomputed cluster labels (and tokens for display)
     return render_template('cluster.html', clusters=precomputed_clusters, tokens=tokens_list)
+
+@app.route('/numeric_rank')
+def numeric_rank():
+    global all_embs, tokens, loaded_numrank_data
+
+    numeric_ranks = []
+    eigenvalues_list = []
+ 
+    for layer_emb in all_embs:
+        embeddings = np.array(layer_emb)
+        A = cosine_similarity(embeddings)
+        eigenvalues = np.linalg.eigvalsh(A)  # Using eigh for symmetric matrices
+        sorted_indices = np.argsort(np.abs(eigenvalues))[::-1]
+        sorted_eigenvalues = eigenvalues[sorted_indices]
+        eigenvalues_list.append(sorted_eigenvalues.tolist())
+        sum_abs = np.sum(np.abs(sorted_eigenvalues))
+        max_abs = np.max(np.abs(sorted_eigenvalues))
+        numeric_ranks.append(sum_abs / max_abs)
+
+    num_layers = len(all_embs)
+    numeric_ranks = [float(num) for num in numeric_ranks] # just in case np doesn't work
+
+    return render_template('numeric_rank.html',
+                           num_layers=num_layers,
+                           eigenvalues_json=json.dumps(eigenvalues_list),
+                           numeric_ranks_json=json.dumps(numeric_ranks),
+                           mean_curve=json.dumps(list(loaded_numrank_data["mean_curve"])),
+                           ci_lower=json.dumps(list(loaded_numrank_data["lower_bound"])),
+                           ci_upper=json.dumps(list(loaded_numrank_data["upper_bound"])))
+
+@app.route('/wasserstein')
+def wasserstein():
+    global all_embs, tokens
+
+    subsample_sizes = [i for i in range(20, 120)]
+    n_neighbors = 10
+    p = 2
+    plot_data = []
+
+    for layer_num in range(num_layers):
+        layer_embs = all_embs[layer_num]
+        X = np.array(layer_embs)
+        
+        if len(X) < max(subsample_sizes):
+            continue
+        
+        try:
+            result = estimate_clustering_dimension_intrinsic(
+                X, subsample_sizes, layer_num, p, n_neighbors
+            )
+            plot_data.append(result)
+        except Exception as e:
+            print(f"Error processing layer {layer_num}: {e}")
+            continue
+
+    return render_template('wasserstein.html', plot_data=plot_data)
 
 if __name__ == '__main__':
     app.run(debug=True)

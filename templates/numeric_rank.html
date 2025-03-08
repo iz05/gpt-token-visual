@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Numeric Rank</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+        }
+        #numericRankDisplay {
+            font-size: 2.5em;
+            margin: 30px 0;
+            color: #2c3e50;
+            min-height: 60px;
+        }
+        .slider-container {
+            margin: 40px auto;
+            max-width: 800px;
+        }
+        #layerSlider {
+            width: 80%;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 25px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        #plot-container {
+            margin-top: 30px;
+            height: 500px;
+        }
+        #main-plot-container {
+            height: 500px;
+            margin-bottom: 40px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-plot-container"></div>
+
+    <a href="{{ url_for('index') }}" class="button">← Back to Main</a>
+
+    <div id="plot-container"></div>
+
+    <div class="slider-container">
+        <input type="range" id="layerSlider" min="0" value="0" step="1">
+        <div id="numericRankDisplay">Loading...</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Parse both datasets
+            const numericRanks = JSON.parse('{{ numeric_ranks_json | safe }}');
+            const eigenvalues = JSON.parse('{{ eigenvalues_json | safe }}');
+            const layers = Array.from({length: {{ num_layers }} }, (_, i) => i);
+            const meanCurve = JSON.parse('{{ mean_curve | safe }}');
+            const ciLower = JSON.parse('{{ ci_lower | safe }}');
+            const ciUpper = JSON.parse('{{ ci_upper | safe }}');
+
+            Plotly.newPlot('main-plot-container', 
+                [
+                    {
+                        x: layers,
+                        y: numericRanks,
+                        mode: 'lines+markers',
+                        name: 'Current Run',
+                        line: {color: 'blue'}
+                    },
+                    {
+                        x: layers,
+                        y: meanCurve,
+                        mode: 'lines',
+                        name: 'Mean',
+                        line: {color: 'red', dash: 'dash'}
+                    },
+                    {
+                        x: layers,
+                        y: ciUpper,
+                        mode: 'none',
+                        name: 'Upper CI',
+                        fill: 'tonexty',
+                        fillcolor: 'rgba(255,0,0,0.2)',
+                        line: {color: 'rgba(255,0,0,0.2)'}
+                    },
+                    {
+                        x: layers,
+                        y: ciLower,
+                        mode: 'none',
+                        name: 'Lower CI',
+                        fill: 'tonexty',
+                        fillcolor: 'rgba(255,0,0,0.2)',
+                        line: {color: 'rgba(255,0,0,0.2)'}
+                    }
+                ],
+                {
+                    title: 'Layer vs. Numeric Rank',
+                    xaxis: {title: 'Layer'},
+                    yaxis: {title: 'Numeric Rank'},
+                    showlegend: true
+                }
+            );
+
+            // Debug output
+            console.log('Numeric Ranks:', numericRanks);
+            console.log('Eigenvalues:', eigenvalues);
+
+            const maxLayer = {{ num_layers - 1 }};
+            const slider = document.getElementById('layerSlider');
+            const display = document.getElementById('numericRankDisplay');
+            const plotDiv = document.getElementById('plot-container');
+
+            // Initialize slider
+            slider.max = maxLayer;
+
+            function updateDisplay() {
+                const layer = parseInt(slider.value);
+                
+                // Update numeric rank
+                display.textContent = `Layer ${layer} Numeric Rank: ${numericRanks[layer].toFixed(2)}`;
+
+                // Update plot
+                const trace = {
+                    x: eigenvalues[layer].map((_, i) => i + 1),
+                    y: eigenvalues[layer],
+                    mode: 'lines+markers',
+                    type: 'scatter',
+                    name: 'Eigenvalues'
+                };
+
+                const layout = {
+                    title: `Eigenvalues - Layer ${layer}`,
+                    xaxis: {title: 'Rank'},
+                    yaxis: {title: 'Value'},
+                    showlegend: false
+                };
+
+                Plotly.react(plotDiv, [trace], layout);
+            }
+
+            // Initial update
+            updateDisplay();
+            
+            // Event listener
+            slider.addEventListener('input', updateDisplay);
+        });
+    </script>
+</body>
+</html>
